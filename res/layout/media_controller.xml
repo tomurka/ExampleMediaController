@@ -68,7 +68,7 @@
             android:id="@+id/mediacontroller_progress"
             android:layout_width="0dip"
             android:layout_weight="1"
-            android:layout_height="32dip"
+            android:layout_height="wrap_content"
             android:thumb="@drawable/seek_handler"
             android:progressDrawable="@drawable/seekbar_progress"/>
 

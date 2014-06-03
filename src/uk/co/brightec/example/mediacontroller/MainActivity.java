@@ -1,17 +1,30 @@
 package uk.co.brightec.example.mediacontroller;
 
+import android.net.Uri;
 import android.os.Bundle;
 import android.app.Activity;
 import android.content.Intent;
 import android.view.Menu;
+import android.view.View;
 
 public class MainActivity extends Activity {
+    private VideoPlayerDialog mDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        startActivity(new Intent(this, VideoPlayerActivity.class));
+        mDialog = new VideoPlayerDialog(this, this, Uri.parse("http://erezmor.s3.amazonaws.com/tutorial_1.mp4"));
+        mDialog.show();
+
+        findViewById(R.id.content_container).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mDialog.show();
+            }
+        });
+
+
     }
 
     @Override
@@ -21,4 +34,9 @@ public class MainActivity extends Activity {
         return true;
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mDialog.dismiss();
+    }
 }

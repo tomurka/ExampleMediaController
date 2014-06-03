@@ -3,50 +3,65 @@ package uk.co.brightec.example.mediacontroller;
 import java.io.IOException;
 
 import android.app.Activity;
+import android.app.Dialog;
+import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
-import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
-import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
-public class VideoPlayerActivity extends Activity implements SurfaceHolder.Callback, MediaPlayer.OnPreparedListener,
-        VideoControllerView.MediaPlayerControl, MediaPlayer.OnBufferingUpdateListener, MediaPlayer.OnErrorListener, MediaPlayer.OnCompletionListener {
+public class VideoPlayerDialog extends Dialog implements SurfaceHolder.Callback, MediaPlayer.OnPreparedListener,
+        VideoControllerView.MediaPlayerControl, MediaPlayer.OnBufferingUpdateListener, MediaPlayer.OnErrorListener,
+        MediaPlayer.OnCompletionListener {
 
-    private SurfaceView videoSurface;
-    private MediaPlayer player;
-    private VideoControllerView controller;
+    private SurfaceView mVideoSurface;
+    private MediaPlayer mMediaPlayer;
+    private VideoControllerView mVideoControllerView;
     private int mCurrBuffer;
+    private Uri mMeduaUri;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_video_player);
+    private Activity mHost;
 
-        videoSurface = (SurfaceView) findViewById(R.id.videoSurface);
-        SurfaceHolder videoHolder = videoSurface.getHolder();
+    public VideoPlayerDialog(Context context, Activity host, Uri mediaUri) {
+        super(context, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+//        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+
+        mHost = host;
+        mMeduaUri = mediaUri;
+
+        setContentView(R.layout.video_player_dialog);
+
+        mVideoSurface = (SurfaceView) findViewById(R.id.videoSurface);
+        SurfaceHolder videoHolder = mVideoSurface.getHolder();
         videoHolder.addCallback(this);
 
-        player = new MediaPlayer();
-        controller = new VideoControllerView(this);
+        mMediaPlayer = new MediaPlayer();
+        mVideoControllerView = new VideoControllerView(getContext());
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
+    public void show() {
+        super.show();
         findViewById(R.id.progress).setVisibility(View.VISIBLE);
         try {
-            player.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            player.setDataSource(this, Uri.parse("http://erezmor.s3.amazonaws.com/tutorial_1.mp4"));
-            player.setOnErrorListener(this);
-            player.setOnPreparedListener(this);
-            player.setOnBufferingUpdateListener(this);
+            mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+            mMediaPlayer.setDataSource(getContext(), mMeduaUri);
+            mMediaPlayer.setOnErrorListener(this);
+            mMediaPlayer.setOnPreparedListener(this);
+            mMediaPlayer.setOnBufferingUpdateListener(this);
+            mMediaPlayer.setOnCompletionListener(this);
         } catch (IllegalArgumentException e) {
             e.printStackTrace();
         } catch (SecurityException e) {
@@ -60,20 +75,20 @@ public class VideoPlayerActivity extends Activity implements SurfaceHolder.Callb
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        controller.show();
+        mVideoControllerView.show();
         return false;
     }
 
     @Override
     public void onBackPressed() {
         super.onBackPressed();
-        player.release();
+        dismiss();
     }
 
     @Override
-    protected void onPause() {
-        super.onPause();
-        player.reset();
+    public void dismiss() {
+        super.dismiss();
+        mMediaPlayer.reset();
     }
 
     /**
@@ -86,9 +101,8 @@ public class VideoPlayerActivity extends Activity implements SurfaceHolder.Callb
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-
-        player.setDisplay(holder);
-        player.prepareAsync();
+        mMediaPlayer.setDisplay(holder);
+        mMediaPlayer.prepareAsync();
     }
 
     @Override
@@ -102,10 +116,10 @@ public class VideoPlayerActivity extends Activity implements SurfaceHolder.Callb
      */
     @Override
     public void onPrepared(MediaPlayer mp) {
-        controller.setMediaPlayer(this);
-        controller.setAnchorView((FrameLayout) findViewById(R.id.videoSurfaceContainer));
+        mVideoControllerView.setMediaPlayer(this);
+        mVideoControllerView.setAnchorView((FrameLayout) findViewById(R.id.videoSurfaceContainer));
         handleAspectRatio();
-        player.start();
+        mMediaPlayer.start();
         findViewById(R.id.progress).setVisibility(View.GONE);
     }
     // End MediaPlayer.OnPreparedListener
@@ -115,31 +129,38 @@ public class VideoPlayerActivity extends Activity implements SurfaceHolder.Callb
      */
     @Override
     public boolean onError(MediaPlayer mediaPlayer, int what, int extra) {
-        Log.e(getPackageName(), String.format("Error(%s%s)", what, extra));
+        Log.e(getContext().getPackageName(), String.format("Error(%s%s)", what, extra));
+
+        if (extra == MediaPlayer.MEDIA_ERROR_IO) {
+            Toast.makeText(getContext(), "Network issue", Toast.LENGTH_SHORT).show();
+            mMediaPlayer.reset();
+        }
 
         if (what == MediaPlayer.MEDIA_ERROR_SERVER_DIED) {
-            player.reset();
+            mMediaPlayer.reset();
         } else if (what == MediaPlayer.MEDIA_ERROR_UNKNOWN) {
-            player.reset();
+            mMediaPlayer.reset();
         }
-        player.setOnErrorListener(this);
-        player.setOnPreparedListener(this);
-        player.setOnBufferingUpdateListener(this);
+        mMediaPlayer.setOnErrorListener(this);
+        mMediaPlayer.setOnPreparedListener(this);
+        mMediaPlayer.setOnBufferingUpdateListener(this);
+        mMediaPlayer.setOnCompletionListener(this);
 
         return true;
     }
+    //
 
     /**
      * Handle aspect ratio
      */
     private void handleAspectRatio() {
-        int videoWidth = player.getVideoWidth();
-        int videoHeight = player.getVideoHeight();
+        int videoWidth = mMediaPlayer.getVideoWidth();
+        int videoHeight = mMediaPlayer.getVideoHeight();
         float videoProportion = (float) videoWidth / (float) videoHeight;
-        int screenWidth = getWindowManager().getDefaultDisplay().getWidth();
-        int screenHeight = getWindowManager().getDefaultDisplay().getHeight();
+        int screenWidth = mHost.getWindowManager().getDefaultDisplay().getWidth();
+        int screenHeight = mHost.getWindowManager().getDefaultDisplay().getHeight();
         float screenProportion = (float) screenWidth / (float) screenHeight;
-        android.view.ViewGroup.LayoutParams lp = videoSurface.getLayoutParams();
+        android.view.ViewGroup.LayoutParams lp = mVideoSurface.getLayoutParams();
 
         if (videoProportion > screenProportion) {
             lp.width = screenWidth;
@@ -148,8 +169,9 @@ public class VideoPlayerActivity extends Activity implements SurfaceHolder.Callb
             lp.width = (int) (videoProportion * (float) screenHeight);
             lp.height = screenHeight;
         }
-        videoSurface.setLayoutParams(lp);
+        mVideoSurface.setLayoutParams(lp);
     }
+    //
 
     /**
      * Buffering updates listening
@@ -168,7 +190,7 @@ public class VideoPlayerActivity extends Activity implements SurfaceHolder.Callb
      */
     @Override
     public void onCompletion(MediaPlayer mediaPlayer) {
-        Toast.makeText(this, "Playback finished!", Toast.LENGTH_LONG).show();
+        Toast.makeText(getContext(), "Playback finished!", Toast.LENGTH_LONG).show();
     }
 
     /**
@@ -198,32 +220,32 @@ public class VideoPlayerActivity extends Activity implements SurfaceHolder.Callb
 
     @Override
     public int getCurrentPosition() {
-        return player.getCurrentPosition();
+        return mMediaPlayer.getCurrentPosition();
     }
 
     @Override
     public int getDuration() {
-        return player.getDuration();
+        return mMediaPlayer.getDuration();
     }
 
     @Override
     public boolean isPlaying() {
-        return player.isPlaying();
+        return mMediaPlayer.isPlaying();
     }
 
     @Override
     public void pause() {
-        player.pause();
+        mMediaPlayer.pause();
     }
 
     @Override
     public void seekTo(int i) {
-        player.seekTo(i);
+        mMediaPlayer.seekTo(i);
     }
 
     @Override
     public void start() {
-        player.start();
+        mMediaPlayer.start();
     }
 
     @Override
